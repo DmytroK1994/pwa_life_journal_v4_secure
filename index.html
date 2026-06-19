@@ -1,0 +1,1226 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#020617" />
+  <title>Особистий сейф</title>
+  <link rel="manifest" href="manifest.json" />
+  <style>
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    :root {
+      --bg: #f3f4f8;
+      --card: #ffffff;
+      --text: #0f172a;
+      --muted: #64748b;
+      --line: #e2e8f0;
+      --dark: #0f172a;
+      --blue: #2563eb;
+      --green: #16a34a;
+      --red: #dc2626;
+      --orange: #ea580c;
+      --soft-blue: #eff6ff;
+      --radius: 22px;
+      --shadow: 0 16px 40px rgba(15,23,42,.08);
+    }
+    body.dark {
+      --bg: #020617;
+      --card: #0f172a;
+      --text: #f8fafc;
+      --muted: #94a3b8;
+      --line: #1e293b;
+      --soft-blue: #172554;
+      --shadow: 0 16px 40px rgba(0,0,0,.35);
+    }
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      padding-bottom: calc(env(safe-area-inset-bottom) + 82px);
+    }
+    body.locked { padding-bottom: 0; }
+    header {
+      position: sticky;
+      top: 0;
+      z-index: 50;
+      padding: calc(env(safe-area-inset-top) + 12px) 14px 10px;
+      background: rgba(243,244,248,.9);
+      backdrop-filter: blur(18px);
+      border-bottom: 1px solid var(--line);
+    }
+    body.dark header { background: rgba(2,6,23,.88); }
+    body.locked header, body.locked .bottomNav { display: none; }
+    .headerTop { display: flex; align-items: center; gap: 10px; }
+    .appTitle { flex: 1; min-width: 0; }
+    .appTitle h1 { margin: 0; font-size: 21px; line-height: 1.15; }
+    .appTitle p { margin: 3px 0 0; color: var(--muted); font-size: 12px; }
+    button, input, textarea, select { font: inherit; }
+    button {
+      border: 0;
+      border-radius: 16px;
+      padding: 12px 14px;
+      background: var(--dark);
+      color: white;
+      font-weight: 800;
+      cursor: pointer;
+    }
+    button.icon {
+      width: 44px; height: 44px; padding: 0;
+      display: grid; place-items: center; border-radius: 16px;
+    }
+    button.small { padding: 9px 11px; border-radius: 13px; font-size: 13px; }
+    button.secondary { background: var(--line); color: var(--text); }
+    button.blue { background: var(--blue); }
+    button.green { background: var(--green); }
+    button.red { background: var(--red); }
+    button.orange { background: var(--orange); }
+    button:disabled { opacity: .55; cursor: not-allowed; }
+    input, textarea, select {
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      padding: 13px;
+      background: var(--card);
+      color: var(--text);
+      outline: none;
+    }
+    textarea { min-height: 170px; resize: vertical; line-height: 1.45; }
+    .searchBox { margin-top: 12px; display: flex; gap: 8px; }
+    main { max-width: 980px; margin: 0 auto; padding: 14px; }
+    .quickGrid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+    .quickCard {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 20px;
+      padding: 14px 10px;
+      box-shadow: var(--shadow);
+      text-align: center;
+      font-weight: 850;
+      min-height: 84px;
+      display: grid;
+      place-items: center;
+      cursor: pointer;
+    }
+    .quickCard span { display: block; font-size: 24px; margin-bottom: 3px; }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 15px;
+      margin-bottom: 12px;
+      box-shadow: var(--shadow);
+    }
+    .sectionTitle {
+      display: flex; align-items: center; justify-content: space-between;
+      gap: 10px; margin-bottom: 10px;
+    }
+    .sectionTitle h2 { margin: 0; font-size: 18px; }
+    .muted { color: var(--muted); font-size: 13px; }
+    .tabs { display: flex; gap: 8px; overflow-x: auto; padding: 2px 0 12px; scrollbar-width: none; }
+    .tab {
+      white-space: nowrap; background: var(--card); border: 1px solid var(--line);
+      color: var(--text); border-radius: 999px; padding: 10px 13px;
+      font-size: 13px; font-weight: 800;
+    }
+    .tab.active { background: var(--dark); color: white; border-color: var(--dark); }
+    .note { display: grid; gap: 10px; cursor: pointer; }
+    .noteHead { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+    .note h3 { margin: 0; font-size: 18px; line-height: 1.25; }
+    .noteBody { white-space: pre-wrap; line-height: 1.45; color: var(--text); }
+    .tags { display: flex; gap: 6px; flex-wrap: wrap; }
+    .tag {
+      display: inline-flex; align-items: center; border-radius: 999px;
+      background: var(--soft-blue); color: #2563eb; padding: 5px 8px;
+      font-size: 12px; font-weight: 800;
+    }
+    .attachments { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+    .attachment {
+      border: 1px solid var(--line); border-radius: 16px; overflow: hidden;
+      background: var(--bg); display: grid; place-items: center;
+    }
+    .attachment img { width: 100%; max-height: 360px; object-fit: contain; display: block; background: var(--bg); }
+    .attachment video { width: 100%; max-height: 360px; display: block; background: #000; }
+    .attachment audio { width: 100%; padding: 8px; }
+    .fileTile { width: 100%; min-height: 74px; display: grid; place-items: center; color: var(--muted); font-weight: 800; }
+    .actions { display: flex; flex-wrap: wrap; gap: 8px; }
+    .bottomNav {
+      position: fixed; left: 0; right: 0; bottom: 0; z-index: 45;
+      padding: 8px 10px calc(env(safe-area-inset-bottom) + 8px);
+      background: rgba(255,255,255,.92); border-top: 1px solid var(--line);
+      backdrop-filter: blur(18px); display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px;
+    }
+    body.dark .bottomNav { background: rgba(2,6,23,.9); }
+    .navBtn {
+      background: transparent; color: var(--muted); padding: 8px 4px; border-radius: 16px;
+      font-size: 11px; display: grid; place-items: center; gap: 2px; font-weight: 850;
+    }
+    .navBtn b { font-size: 20px; line-height: 1; }
+    .navBtn.active { background: var(--dark); color: white; }
+    dialog {
+      width: min(760px, calc(100vw - 22px)); max-height: 92vh; border: 0; border-radius: 26px;
+      padding: 0; background: var(--card); color: var(--text); box-shadow: 0 30px 90px rgba(0,0,0,.38);
+    }
+    dialog::backdrop { background: rgba(0,0,0,.5); }
+    .modal { padding: 16px; max-height: 92vh; overflow: auto; }
+    .modalHead {
+      display: flex; align-items: center; justify-content: space-between; gap: 12px;
+      margin-bottom: 14px; position: sticky; top: -16px; background: var(--card);
+      padding-top: 8px; z-index: 2;
+    }
+    .modalHead h2 { margin: 0; font-size: 20px; }
+    .formGrid { display: grid; gap: 10px; }
+    .two { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .attachPicker { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+    .attachPicker button { min-height: 74px; background: var(--soft-blue); color: var(--text); border: 1px solid var(--line); }
+    .recordBox { border: 1px solid var(--line); border-radius: 18px; padding: 12px; background: var(--bg); display: grid; gap: 10px; }
+    .recordStatus { font-weight: 850; color: var(--muted); }
+    .empty { text-align: center; color: var(--muted); padding: 34px 12px; }
+    .sideMenu { position: fixed; inset: 0; z-index: 80; pointer-events: none; }
+    .sideMenu.open { pointer-events: auto; }
+    .menuBackdrop { position: absolute; inset: 0; background: rgba(0,0,0,.45); opacity: 0; transition: .18s; }
+    .sideMenu.open .menuBackdrop { opacity: 1; }
+    .menuPanel {
+      position: absolute; top: 0; bottom: 0; left: 0; width: min(360px, 86vw);
+      background: var(--card); border-right: 1px solid var(--line);
+      transform: translateX(-102%); transition: .22s;
+      padding: calc(env(safe-area-inset-top) + 14px) 14px 14px; overflow: auto;
+    }
+    .sideMenu.open .menuPanel { transform: translateX(0); }
+    .menuItem {
+      display: flex; align-items: center; gap: 12px; width: 100%;
+      background: transparent; color: var(--text); padding: 13px 10px; border-radius: 16px; text-align: left;
+    }
+    .menuItem.active { background: var(--dark); color: white; }
+    .menuItem .emoji { width: 28px; font-size: 22px; text-align: center; }
+    .fileInput { display: none; }
+    .statGrid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+    .stat { background: var(--bg); border: 1px solid var(--line); border-radius: 18px; padding: 12px; text-align: center; }
+    .stat strong { display: block; font-size: 22px; }
+    .miniRow {
+      display: flex; justify-content: space-between; gap: 12px;
+      padding: 10px 0; border-bottom: 1px solid var(--line); cursor: pointer;
+    }
+    .miniRow:last-child { border-bottom: 0; }
+    .detailTitle { margin: 0; font-size: 24px; line-height: 1.18; }
+    .detailBody { white-space: pre-wrap; line-height: 1.55; font-size: 16px; }
+
+    .lockScreen {
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      padding: calc(env(safe-area-inset-top) + 18px) 16px calc(env(safe-area-inset-bottom) + 18px);
+      background: radial-gradient(circle at 20% 10%, #1d4ed8 0, transparent 28%), radial-gradient(circle at 80% 0%, #16a34a 0, transparent 22%), #020617;
+      color: white;
+    }
+    .lockCard {
+      width: min(430px, 100%);
+      background: rgba(15,23,42,.82);
+      border: 1px solid rgba(255,255,255,.14);
+      border-radius: 30px;
+      padding: 22px;
+      box-shadow: 0 30px 90px rgba(0,0,0,.55);
+      backdrop-filter: blur(18px);
+    }
+    .lockIcon {
+      width: 72px; height: 72px; border-radius: 24px;
+      display: grid; place-items: center;
+      background: rgba(255,255,255,.12);
+      font-size: 36px; margin-bottom: 14px;
+    }
+    .lockCard h1 { margin: 0; font-size: 26px; }
+    .lockCard p { color: #cbd5e1; line-height: 1.45; }
+    .lockCard input {
+      background: rgba(255,255,255,.08);
+      border-color: rgba(255,255,255,.15);
+      color: white;
+      font-size: 20px;
+      text-align: center;
+      letter-spacing: 4px;
+    }
+    .lockCard input::placeholder { letter-spacing: normal; color: #94a3b8; }
+    .lockActions { display: grid; gap: 9px; margin-top: 12px; }
+    .securityBadge {
+      display: inline-flex; align-items: center; gap: 6px;
+      border-radius: 999px; padding: 6px 10px;
+      background: rgba(34,197,94,.14);
+      color: #86efac;
+      font-size: 12px; font-weight: 850;
+      margin-top: 10px;
+    }
+    .privacyOverlay {
+      position: fixed; inset: 0; background: #020617; color: white;
+      z-index: 999; display: none; place-items: center; text-align: center; padding: 22px;
+    }
+    .privacyOverlay.show { display: grid; }
+
+    @media (min-width: 860px) {
+      .bottomNav { display: none; }
+      body { padding-bottom: 20px; }
+      .quickGrid { grid-template-columns: repeat(6, 1fr); }
+      .attachments { grid-template-columns: repeat(3, 1fr); }
+    }
+    @media (max-width: 640px) {
+      main { padding: 12px; }
+      .quickGrid { grid-template-columns: repeat(2, 1fr); }
+      .attachments { grid-template-columns: 1fr; }
+      .two { grid-template-columns: 1fr; }
+      .attachPicker { grid-template-columns: 1fr; }
+      .statGrid { grid-template-columns: repeat(2, 1fr); }
+      .note h3 { font-size: 17px; }
+    }
+  </style>
+</head>
+<body class="locked">
+  <div id="privacyOverlay" class="privacyOverlay">
+    <div>
+      <div style="font-size:54px">🔒</div>
+      <h2>Журнал приховано</h2>
+      <p>Повернись у додаток, щоб продовжити.</p>
+    </div>
+  </div>
+
+  <section id="lockScreen" class="lockScreen">
+    <div class="lockCard">
+      <div class="lockIcon">🔐</div>
+      <h1 id="lockTitle">Особистий сейф</h1>
+      <p id="lockText">Створи PIN, щоб зашифрувати записи. Без PIN дані зберігаються як шифрований набір символів.</p>
+      <div class="formGrid">
+        <input id="pinInput" type="password" inputmode="numeric" autocomplete="current-password" placeholder="PIN мін. 6 цифр" />
+        <input id="pinRepeatInput" type="password" inputmode="numeric" autocomplete="new-password" placeholder="Повторити PIN" />
+        <div class="lockActions">
+          <button class="green" id="unlockBtn">Створити сейф</button>
+          <button class="secondary" id="passkeyBtn" hidden>Увійти через Face ID / Passkey</button>
+          <button class="secondary" id="setupPasskeyBtn" hidden>Увімкнути Face ID / Passkey</button>
+        </div>
+      </div>
+      <div class="securityBadge">AES-GCM · PBKDF2 · зашифрований експорт</div>
+      <p class="muted" id="lockHint"></p>
+    </div>
+  </section>
+
+  <header>
+    <div class="headerTop">
+      <button class="icon secondary" id="menuBtn">☰</button>
+      <div class="appTitle">
+        <h1>Особистий сейф</h1>
+        <p id="subtitle">Зашифровані записи, медіа, голосові, база знань</p>
+      </div>
+      <button class="icon secondary" id="lockNowBtn">🔒</button>
+      <button class="icon secondary" id="themeBtn">◐</button>
+    </div>
+    <div class="searchBox">
+      <input id="searchInput" placeholder="Пошук по розшифрованих записах..." />
+      <button class="icon secondary" id="clearSearch">×</button>
+    </div>
+  </header>
+
+  <aside class="sideMenu" id="sideMenu">
+    <div class="menuBackdrop" id="menuBackdrop"></div>
+    <div class="menuPanel">
+      <div class="sectionTitle">
+        <h2>Меню</h2>
+        <button class="icon secondary" id="closeMenu">×</button>
+      </div>
+      <button class="menuItem active" data-view="home"><span class="emoji">🏠</span><span>Головна</span></button>
+      <button class="menuItem" data-view="notes"><span class="emoji">📝</span><span>Усі записи</span></button>
+      <button class="menuItem" data-view="journal"><span class="emoji">📔</span><span>Щоденник</span></button>
+      <button class="menuItem" data-view="work"><span class="emoji">🏭</span><span>Робота</span></button>
+      <button class="menuItem" data-view="prompts"><span class="emoji">🤖</span><span>Промпти ШІ</span></button>
+      <button class="menuItem" data-view="books"><span class="emoji">📚</span><span>Книги</span></button>
+      <button class="menuItem" data-view="media"><span class="emoji">🖼️</span><span>Медіа</span></button>
+      <button class="menuItem" data-view="favorites"><span class="emoji">⭐</span><span>Обране</span></button>
+      <button class="menuItem" data-view="stats"><span class="emoji">📊</span><span>Статистика</span></button>
+      <button class="menuItem" data-view="settings"><span class="emoji">⚙️</span><span>Налаштування</span></button>
+    </div>
+  </aside>
+
+  <main id="app"></main>
+
+  <nav class="bottomNav">
+    <button class="navBtn active" data-view="home"><b>🏠</b>Головна</button>
+    <button class="navBtn" data-view="notes"><b>📝</b>Записи</button>
+    <button class="navBtn" id="quickAddBtn"><b>＋</b>Додати</button>
+    <button class="navBtn" data-view="media"><b>🖼️</b>Медіа</button>
+    <button class="navBtn" data-view="settings"><b>⚙️</b>Меню</button>
+  </nav>
+
+  <dialog id="viewDialog">
+    <div class="modal">
+      <div class="modalHead">
+        <button class="icon secondary" id="closeView">←</button>
+        <div class="actions">
+          <button class="small blue" id="editFromView">Редагувати</button>
+          <button class="small secondary" id="shareFromView">📤</button>
+        </div>
+      </div>
+      <div id="viewContent"></div>
+    </div>
+  </dialog>
+
+  <dialog id="entryDialog">
+    <div class="modal">
+      <div class="modalHead">
+        <h2 id="dialogTitle">Новий запис</h2>
+        <button class="icon secondary" id="closeEntry">×</button>
+      </div>
+
+      <div class="formGrid">
+        <input id="entryTitle" placeholder="Заголовок" />
+        <div class="two">
+          <select id="entryType">
+            <option value="note">📝 Нотатка</option>
+            <option value="journal">📔 Щоденник</option>
+            <option value="work">🏭 Робота</option>
+            <option value="prompt">🤖 Промпт ШІ</option>
+            <option value="book">📚 Книга</option>
+            <option value="idea">💡 Ідея</option>
+            <option value="family">👨‍👩‍👧 Родина</option>
+            <option value="finance">💰 Фінанси</option>
+          </select>
+          <input id="entryTags" placeholder="Теги через кому" />
+        </div>
+
+        <textarea id="entryBody" placeholder="Текст, думка, інструкція, промпт, спостереження..."></textarea>
+
+        <div class="two">
+          <label><input type="checkbox" id="entryFavorite" /> ⭐ Обране</label>
+          <label><input type="checkbox" id="entryPinned" /> 📌 Закріпити</label>
+        </div>
+
+        <div class="recordBox">
+          <div class="recordStatus" id="recordStatus">Голосовий запис не активний</div>
+          <div class="actions">
+            <button class="green small" id="startRecord">🎙️ Почати запис</button>
+            <button class="red small" id="stopRecord" disabled>■ Зупинити</button>
+          </div>
+        </div>
+
+        <div class="attachPicker">
+          <button id="addMediaBtn">🖼️ Додати фото/відео</button>
+          <button id="addAudioBtn">🎧 Додати аудіо</button>
+          <button id="addAnyFileBtn">📎 Додати файл</button>
+        </div>
+
+        <input class="fileInput" id="mediaInput" type="file" accept="image/*,video/*" multiple />
+        <input class="fileInput" id="audioInput" type="file" accept="audio/*" multiple />
+        <input class="fileInput" id="fileInput" type="file" multiple />
+
+        <div id="draftAttachments" class="attachments"></div>
+
+        <div class="actions">
+          <button class="blue" id="saveEntry">Зберегти і зашифрувати</button>
+          <button class="secondary" id="shareDraft">Поділитися текстом</button>
+        </div>
+      </div>
+    </div>
+  </dialog>
+
+  <input class="fileInput" id="importInput" type="file" accept="application/json,.vault" />
+
+  <script>
+    const VAULT_KEY = "secure_life_journal_v4_vault";
+    const SETTINGS_KEY = "secure_life_journal_v4_settings";
+    const THEME_KEY = "secure_life_journal_theme_v4";
+    const PBKDF2_ITERATIONS = 310000;
+
+    const typeMap = {
+      note: { label: "Нотатка", emoji: "📝" },
+      journal: { label: "Щоденник", emoji: "📔" },
+      work: { label: "Робота", emoji: "🏭" },
+      prompt: { label: "Промпт ШІ", emoji: "🤖" },
+      book: { label: "Книга", emoji: "📚" },
+      idea: { label: "Ідея", emoji: "💡" },
+      family: { label: "Родина", emoji: "👨‍👩‍👧" },
+      finance: { label: "Фінанси", emoji: "💰" }
+    };
+
+    let state = {
+      unlocked: false,
+      view: "home",
+      entries: [],
+      editingId: null,
+      viewingId: null,
+      draftAttachments: [],
+      mediaRecorder: null,
+      recordChunks: [],
+      cryptoKey: null,
+      settings: {
+        created: false,
+        salt: null,
+        passkeyId: null,
+        autolockMinutes: 5,
+        failedAttempts: 0,
+        lockUntil: 0
+      },
+      autoLockTimer: null
+    };
+
+    const $ = id => document.getElementById(id);
+
+    function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 9); }
+    function nowISO() { return new Date().toISOString(); }
+
+    function bytesToBase64(bytes) {
+      let bin = "";
+      bytes.forEach(b => bin += String.fromCharCode(b));
+      return btoa(bin);
+    }
+    function base64ToBytes(base64) {
+      const bin = atob(base64);
+      const bytes = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+      return bytes;
+    }
+    function randomBytes(len = 16) {
+      const arr = new Uint8Array(len);
+      crypto.getRandomValues(arr);
+      return arr;
+    }
+    async function deriveKey(pin, saltBase64) {
+      const enc = new TextEncoder();
+      const baseKey = await crypto.subtle.importKey("raw", enc.encode(pin), "PBKDF2", false, ["deriveKey"]);
+      return crypto.subtle.deriveKey(
+        { name: "PBKDF2", salt: base64ToBytes(saltBase64), iterations: PBKDF2_ITERATIONS, hash: "SHA-256" },
+        baseKey,
+        { name: "AES-GCM", length: 256 },
+        false,
+        ["encrypt", "decrypt"]
+      );
+    }
+    async function encryptJson(obj, key) {
+      const iv = randomBytes(12);
+      const data = new TextEncoder().encode(JSON.stringify(obj));
+      const encrypted = await crypto.subtle.encrypt({ name: "AES-GCM", iv }, key, data);
+      return {
+        version: 4,
+        alg: "AES-GCM",
+        kdf: "PBKDF2-SHA256",
+        iterations: PBKDF2_ITERATIONS,
+        iv: bytesToBase64(iv),
+        data: bytesToBase64(new Uint8Array(encrypted)),
+        updatedAt: nowISO()
+      };
+    }
+    async function decryptJson(vault, key) {
+      const decrypted = await crypto.subtle.decrypt(
+        { name: "AES-GCM", iv: base64ToBytes(vault.iv) },
+        key,
+        base64ToBytes(vault.data)
+      );
+      return JSON.parse(new TextDecoder().decode(decrypted));
+    }
+
+    function saveSettings() { localStorage.setItem(SETTINGS_KEY, JSON.stringify(state.settings)); }
+    function loadSettings() {
+      try {
+        const raw = localStorage.getItem(SETTINGS_KEY);
+        if (raw) state.settings = { ...state.settings, ...JSON.parse(raw) };
+      } catch {}
+    }
+    async function saveVault() {
+      if (!state.cryptoKey) return;
+      const vault = await encryptJson({ entries: state.entries }, state.cryptoKey);
+      localStorage.setItem(VAULT_KEY, JSON.stringify(vault));
+    }
+    function hasVault() { return !!localStorage.getItem(VAULT_KEY); }
+
+    function formatDate(iso) {
+      try { return new Date(iso).toLocaleString("uk-UA", { dateStyle: "medium", timeStyle: "short" }); }
+      catch { return iso || ""; }
+    }
+    function escapeHtml(str) {
+      return String(str || "").replace(/[&<>"']/g, s => ({
+        "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;"
+      }[s]));
+    }
+
+    function renderLock() {
+      document.body.classList.add("locked");
+      $("lockScreen").style.display = "grid";
+      $("pinInput").value = "";
+      $("pinRepeatInput").value = "";
+      const created = state.settings.created && hasVault();
+
+      $("pinRepeatInput").style.display = created ? "none" : "block";
+      $("unlockBtn").textContent = created ? "Розблокувати PIN" : "Створити сейф";
+      $("lockTitle").textContent = created ? "Сейф заблоковано" : "Створення сейфа";
+      $("lockText").textContent = created
+        ? "Введи PIN. Після успішного входу база розшифрується тільки в памʼяті додатку."
+        : "Створи PIN мінімум 6 цифр. Дані будуть збережені у зашифрованому вигляді.";
+      $("setupPasskeyBtn").hidden = true;
+      $("passkeyBtn").hidden = !(created && state.settings.passkeyId && window.PublicKeyCredential);
+      const until = Number(state.settings.lockUntil || 0);
+      if (until && Date.now() < until) {
+        const sec = Math.ceil((until - Date.now()) / 1000);
+        $("unlockBtn").disabled = true;
+        $("lockHint").textContent = `Заблоковано після невдалих спроб. Спробуй через ${sec} с.`;
+        setTimeout(renderLock, 1000);
+      } else {
+        $("unlockBtn").disabled = false;
+        $("lockHint").textContent = created ? "Face ID/Passkey може працювати тільки на HTTPS або GitHub Pages." : "PIN не зберігається. Зберігається тільки сіль і зашифрована база.";
+      }
+    }
+
+    async function createVaultFlow() {
+      const pin = $("pinInput").value.trim();
+      const repeat = $("pinRepeatInput").value.trim();
+      if (pin.length < 6) return alert("PIN має бути мінімум 6 цифр.");
+      if (pin !== repeat) return alert("PIN не збігається.");
+
+      state.settings.salt = bytesToBase64(randomBytes(16));
+      state.cryptoKey = await deriveKey(pin, state.settings.salt);
+      state.entries = [
+        {
+          id: uid(),
+          title: "Сейф створено",
+          type: "journal",
+          body: "Цей запис уже зберігається в зашифрованому вигляді. Додай фото, відео або голосову нотатку — після збереження вони також потраплять у зашифрований сейф.",
+          tags: ["secure", "старт"],
+          favorite: true,
+          pinned: true,
+          attachments: [],
+          createdAt: nowISO(),
+          updatedAt: nowISO()
+        }
+      ];
+      state.settings.created = true;
+      state.settings.failedAttempts = 0;
+      state.settings.lockUntil = 0;
+      saveSettings();
+      await saveVault();
+      unlockUi();
+      if (window.PublicKeyCredential) $("setupPasskeyBtn").hidden = false;
+    }
+
+    async function unlockFlow() {
+      const until = Number(state.settings.lockUntil || 0);
+      if (until && Date.now() < until) return renderLock();
+
+      if (!state.settings.created || !hasVault()) return createVaultFlow();
+
+      const pin = $("pinInput").value.trim();
+      if (!pin) return alert("Введи PIN.");
+
+      try {
+        const key = await deriveKey(pin, state.settings.salt);
+        const vault = JSON.parse(localStorage.getItem(VAULT_KEY));
+        const decrypted = await decryptJson(vault, key);
+        state.cryptoKey = key;
+        state.entries = Array.isArray(decrypted.entries) ? decrypted.entries : [];
+        state.settings.failedAttempts = 0;
+        state.settings.lockUntil = 0;
+        saveSettings();
+        unlockUi();
+      } catch {
+        state.settings.failedAttempts = Number(state.settings.failedAttempts || 0) + 1;
+        if (state.settings.failedAttempts >= 5) {
+          state.settings.lockUntil = Date.now() + 60000;
+          state.settings.failedAttempts = 0;
+        }
+        saveSettings();
+        renderLock();
+        alert("Неправильний PIN або пошкоджений сейф.");
+      }
+    }
+
+    function unlockUi() {
+      state.unlocked = true;
+      document.body.classList.remove("locked");
+      $("lockScreen").style.display = "none";
+      resetAutoLock();
+      render();
+    }
+
+    function lockNow() {
+      state.unlocked = false;
+      state.entries = [];
+      state.cryptoKey = null;
+      state.editingId = null;
+      state.viewingId = null;
+      closeAllDialogs();
+      renderLock();
+    }
+
+    function closeAllDialogs() {
+      ["viewDialog", "entryDialog"].forEach(id => {
+        const d = $(id);
+        if (d && d.open) d.close();
+      });
+    }
+
+    function resetAutoLock() {
+      clearTimeout(state.autoLockTimer);
+      const min = Number(state.settings.autolockMinutes || 5);
+      if (!min || min === -1) return;
+      state.autoLockTimer = setTimeout(lockNow, min * 60 * 1000);
+    }
+
+    function userActivity() {
+      if (state.unlocked) resetAutoLock();
+    }
+
+    async function setupPasskey() {
+      if (!window.PublicKeyCredential) return alert("Passkey/WebAuthn не підтримується цим браузером.");
+      try {
+        const challenge = randomBytes(32);
+        const userId = randomBytes(16);
+        const credential = await navigator.credentials.create({
+          publicKey: {
+            challenge,
+            rp: { name: "Особистий сейф" },
+            user: {
+              id: userId,
+              name: "local-user",
+              displayName: "Local User"
+            },
+            pubKeyCredParams: [{ type: "public-key", alg: -7 }, { type: "public-key", alg: -257 }],
+            authenticatorSelection: {
+              authenticatorAttachment: "platform",
+              userVerification: "required",
+              residentKey: "preferred"
+            },
+            timeout: 60000,
+            attestation: "none"
+          }
+        });
+        state.settings.passkeyId = bytesToBase64(new Uint8Array(credential.rawId));
+        saveSettings();
+        alert("Face ID / Passkey увімкнено. Для повного розшифрування після перезапуску все одно може знадобитися PIN.");
+      } catch (e) {
+        alert("Не вдалося створити Passkey. На iPhone це працює на HTTPS/GitHub Pages, не завжди з локального файлу.");
+      }
+    }
+
+    async function loginPasskey() {
+      if (!state.settings.passkeyId) return;
+      try {
+        await navigator.credentials.get({
+          publicKey: {
+            challenge: randomBytes(32),
+            allowCredentials: [{
+              type: "public-key",
+              id: base64ToBytes(state.settings.passkeyId)
+            }],
+            userVerification: "required",
+            timeout: 60000
+          }
+        });
+        alert("Face ID/Passkey підтверджено. Тепер введи PIN для розшифрування сейфа.");
+      } catch {
+        alert("Face ID / Passkey не підтверджено.");
+      }
+    }
+
+    function setView(view) {
+      state.view = view;
+      document.querySelectorAll("[data-view]").forEach(btn => btn.classList.toggle("active", btn.dataset.view === view));
+      closeMenu();
+      render();
+    }
+    function openMenu() { $("sideMenu").classList.add("open"); }
+    function closeMenu() { $("sideMenu").classList.remove("open"); }
+
+    function entryText(entry) {
+      const t = typeMap[entry.type] || typeMap.note;
+      return `${t.emoji} ${entry.title}
+
+Тип: ${t.label}
+Теги: ${(entry.tags || []).join(", ")}
+Дата: ${formatDate(entry.updatedAt)}
+
+${entry.body || ""}`;
+    }
+
+    function getFilteredEntries() {
+      const q = $("searchInput").value.trim().toLowerCase();
+      let list = [...state.entries];
+      if (state.view === "journal") list = list.filter(e => e.type === "journal");
+      if (state.view === "work") list = list.filter(e => e.type === "work");
+      if (state.view === "prompts") list = list.filter(e => e.type === "prompt");
+      if (state.view === "books") list = list.filter(e => e.type === "book");
+      if (state.view === "favorites") list = list.filter(e => e.favorite);
+      if (state.view === "media") list = list.filter(e => (e.attachments || []).length);
+      if (q) {
+        list = list.filter(e => [e.title, e.body, e.type, ...(e.tags || [])].join(" ").toLowerCase().includes(q));
+      }
+      return list.sort((a,b) => {
+        if (a.pinned !== b.pinned) return a.pinned ? -1 : 1;
+        return new Date(b.updatedAt) - new Date(a.updatedAt);
+      });
+    }
+
+    function render() {
+      if (!state.unlocked) return;
+      const app = $("app");
+      if (state.view === "home") return renderHome(app);
+      if (state.view === "stats") return renderStatsView(app);
+      if (state.view === "settings") return renderSettings(app);
+      renderEntries(app);
+    }
+
+    function renderHome(app) {
+      const total = state.entries.length;
+      const fav = state.entries.filter(e => e.favorite).length;
+      const media = state.entries.reduce((s,e) => s + (e.attachments || []).filter(a => a.type?.startsWith("image/") || a.type?.startsWith("video/")).length, 0);
+      const voice = state.entries.reduce((s,e) => s + (e.attachments || []).filter(a => a.kind === "recording").length, 0);
+      const recent = [...state.entries].sort((a,b)=>new Date(b.updatedAt)-new Date(a.updatedAt));
+
+      app.innerHTML = `
+        <section class="quickGrid">
+          <div class="quickCard" data-create="journal"><div><span>📔</span>Щоденник</div></div>
+          <div class="quickCard" data-create="note"><div><span>📝</span>Нотатка</div></div>
+          <div class="quickCard" data-create="work"><div><span>🏭</span>Робота</div></div>
+          <div class="quickCard" data-create="prompt"><div><span>🤖</span>Промпт</div></div>
+          <div class="quickCard" data-create="book"><div><span>📚</span>Книга</div></div>
+          <div class="quickCard" data-create="idea"><div><span>💡</span>Ідея</div></div>
+        </section>
+        <section class="card">
+          <div class="sectionTitle">
+            <h2>Огляд сейфа</h2>
+            <button class="small blue" id="homeAdd">+ Додати</button>
+          </div>
+          <div class="statGrid">
+            <div class="stat"><strong>${total}</strong><span class="muted">записів</span></div>
+            <div class="stat"><strong>${fav}</strong><span class="muted">обраних</span></div>
+            <div class="stat"><strong>${media}</strong><span class="muted">фото/відео</span></div>
+            <div class="stat"><strong>${voice}</strong><span class="muted">голосових</span></div>
+          </div>
+        </section>
+        <section class="card">
+          <div class="sectionTitle">
+            <h2>Останні записи</h2>
+            <button class="small secondary" onclick="setView('notes')">Всі</button>
+          </div>
+          ${renderEntryList(recent)}
+        </section>
+      `;
+      document.querySelectorAll("[data-create]").forEach(el => el.onclick = () => openEntry(null, el.dataset.create));
+      $("homeAdd").onclick = () => openEntry();
+      bindEntryButtons();
+    }
+
+    function renderEntries(app) {
+      const titleMap = { notes: "Усі записи", journal: "Щоденник", work: "Робота", prompts: "Промпти ШІ", books: "Книги", media: "Медіа", favorites: "Обране" };
+      const list = getFilteredEntries();
+      app.innerHTML = `
+        <div class="tabs">
+          <button class="tab ${state.view === 'notes' ? 'active' : ''}" data-view="notes">Усі</button>
+          <button class="tab ${state.view === 'journal' ? 'active' : ''}" data-view="journal">📔 Щоденник</button>
+          <button class="tab ${state.view === 'work' ? 'active' : ''}" data-view="work">🏭 Робота</button>
+          <button class="tab ${state.view === 'prompts' ? 'active' : ''}" data-view="prompts">🤖 Промпти</button>
+          <button class="tab ${state.view === 'books' ? 'active' : ''}" data-view="books">📚 Книги</button>
+          <button class="tab ${state.view === 'media' ? 'active' : ''}" data-view="media">🖼️ Медіа</button>
+          <button class="tab ${state.view === 'favorites' ? 'active' : ''}" data-view="favorites">⭐ Обране</button>
+        </div>
+        <section class="card">
+          <div class="sectionTitle">
+            <h2>${titleMap[state.view] || "Записи"}</h2>
+            <button class="small blue" id="addFromList">+ Додати</button>
+          </div>
+          <div class="muted">Знайдено: ${list.length}</div>
+        </section>
+        <section id="entryList">${renderEntryList(list)}</section>
+      `;
+      document.querySelectorAll(".tab[data-view]").forEach(b => b.onclick = () => setView(b.dataset.view));
+      $("addFromList").onclick = () => openEntry(null, inferTypeFromView());
+      bindEntryButtons();
+    }
+
+    function inferTypeFromView() {
+      if (state.view === "journal") return "journal";
+      if (state.view === "work") return "work";
+      if (state.view === "prompts") return "prompt";
+      if (state.view === "books") return "book";
+      return "note";
+    }
+
+    function renderEntryList(list) {
+      if (!list.length) return `<div class="card empty">Записів немає. Додай перший.</div>`;
+      return list.map(e => {
+        const t = typeMap[e.type] || typeMap.note;
+        const preview = e.body && e.body.length > 260 ? e.body.slice(0,260) + "..." : (e.body || "");
+        return `
+          <article class="card note" data-open-entry="${e.id}">
+            <div class="noteHead">
+              <div>
+                <h3>${e.pinned ? "📌 " : ""}${e.favorite ? "⭐ " : ""}${t.emoji} ${escapeHtml(e.title)}</h3>
+                <div class="muted">${t.label} · ${formatDate(e.updatedAt)}</div>
+              </div>
+              <button class="icon secondary" data-share="${e.id}">📤</button>
+            </div>
+            <div class="noteBody">${escapeHtml(preview)}</div>
+            ${renderTags(e.tags)}
+            ${renderAttachments(e.attachments)}
+          </article>
+        `;
+      }).join("");
+    }
+
+    function renderTags(tags = []) {
+      if (!tags.length) return "";
+      return `<div class="tags">${tags.map(t => `<span class="tag">#${escapeHtml(t)}</span>`).join("")}</div>`;
+    }
+
+    function renderAttachments(attachments = []) {
+      if (!attachments.length) return "";
+      return `<div class="attachments">` + attachments.map(a => {
+        if (a.type && a.type.startsWith("image/")) return `<div class="attachment"><img src="${a.data}" alt=""></div>`;
+        if (a.type && a.type.startsWith("video/")) return `<div class="attachment"><video controls src="${a.data}"></video></div>`;
+        if ((a.type && a.type.startsWith("audio/")) || a.kind === "recording") return `<div class="attachment"><audio controls src="${a.data}"></audio></div>`;
+        return `<div class="attachment"><div class="fileTile">📎 Файл</div></div>`;
+      }).join("") + `</div>`;
+    }
+
+    function bindEntryButtons() {
+      document.querySelectorAll("[data-open-entry]").forEach(el => el.onclick = () => openView(el.dataset.openEntry));
+      document.querySelectorAll("[data-share]").forEach(b => {
+        b.onclick = (ev) => { ev.stopPropagation(); shareEntry(b.dataset.share); };
+      });
+    }
+
+    function openView(id) {
+      const e = state.entries.find(x => x.id === id);
+      if (!e) return;
+      state.viewingId = id;
+      const t = typeMap[e.type] || typeMap.note;
+      $("viewContent").innerHTML = `
+        <h1 class="detailTitle">${e.pinned ? "📌 " : ""}${e.favorite ? "⭐ " : ""}${t.emoji} ${escapeHtml(e.title)}</h1>
+        <p class="muted">${t.label} · ${formatDate(e.updatedAt)}</p>
+        ${renderTags(e.tags)}
+        <div style="height:12px"></div>
+        <div class="detailBody">${escapeHtml(e.body || "")}</div>
+        <div style="height:12px"></div>
+        ${renderAttachments(e.attachments)}
+        <div style="height:14px"></div>
+        <div class="actions">
+          <button class="secondary small" onclick="copyEntry('${e.id}')">Копіювати</button>
+          <button class="secondary small" onclick="toggleFieldFromView('${e.id}', 'favorite')">${e.favorite ? "Прибрати ⭐" : "В обране"}</button>
+          <button class="secondary small" onclick="toggleFieldFromView('${e.id}', 'pinned')">${e.pinned ? "Відкріпити" : "Закріпити"}</button>
+          <button class="red small" onclick="deleteEntryFromView('${e.id}')">Видалити</button>
+        </div>
+      `;
+      $("viewDialog").showModal();
+    }
+
+    function closeView() { $("viewDialog").close(); state.viewingId = null; }
+
+    function renderStatsView(app) {
+      const photos = state.entries.reduce((s,e)=>s+(e.attachments||[]).filter(a=>a.type?.startsWith("image/")).length,0);
+      const videos = state.entries.reduce((s,e)=>s+(e.attachments||[]).filter(a=>a.type?.startsWith("video/")).length,0);
+      const audio = state.entries.reduce((s,e)=>s+(e.attachments||[]).filter(a=>a.type?.startsWith("audio/") || a.kind === "recording").length,0);
+      const tags = new Set(state.entries.flatMap(e=>e.tags||[]));
+      app.innerHTML = `
+        <section class="card">
+          <div class="sectionTitle"><h2>Статистика сейфа</h2></div>
+          <div class="statGrid">
+            <div class="stat"><strong>${state.entries.length}</strong><span class="muted">записів</span></div>
+            <div class="stat"><strong>${tags.size}</strong><span class="muted">тегів</span></div>
+            <div class="stat"><strong>${photos}</strong><span class="muted">фото</span></div>
+            <div class="stat"><strong>${videos}</strong><span class="muted">відео</span></div>
+            <div class="stat"><strong>${audio}</strong><span class="muted">аудіо</span></div>
+          </div>
+        </section>
+      `;
+    }
+
+    function renderSettings(app) {
+      app.innerHTML = `
+        <section class="card">
+          <div class="sectionTitle"><h2>Безпека</h2></div>
+          <div class="actions">
+            <button class="secondary" id="setupPasskeySettings">Face ID / Passkey</button>
+            <button class="secondary" id="lockNowSettings">Заблокувати зараз</button>
+          </div>
+          <p class="muted">Дані зашифровані AES-GCM. PIN не зберігається. Passkey тут працює як системне підтвердження, а PIN — як ключ до розшифрування.</p>
+          <label class="muted">Автозамок</label>
+          <select id="autolockSelect">
+            <option value="1">1 хвилина</option>
+            <option value="5">5 хвилин</option>
+            <option value="15">15 хвилин</option>
+            <option value="30">30 хвилин</option>
+            <option value="-1">Не блокувати автоматично</option>
+          </select>
+        </section>
+
+        <section class="card">
+          <div class="sectionTitle"><h2>Зашифровані резервні копії</h2></div>
+          <div class="actions">
+            <button class="blue" id="exportFull">⬆️ Експорт .vault</button>
+            <button class="secondary" id="importFull">⬇️ Імпорт .vault</button>
+            <button class="secondary" id="shareFull">📤 Поділитися .vault</button>
+          </div>
+          <p class="muted">Файл .vault відкриється тільки з твоїм PIN. Якщо забудеш PIN — все, приїхали. Тут без “відновити через мамину пошту”.</p>
+        </section>
+
+        <section class="card">
+          <div class="sectionTitle"><h2>Оформлення</h2></div>
+          <button class="secondary" id="toggleThemeSettings">◐ Світла/темна тема</button>
+        </section>
+
+        <section class="card">
+          <div class="sectionTitle"><h2>Небезпечна зона</h2></div>
+          <button class="red" id="wipeAll">Стерти сейф повністю</button>
+        </section>
+      `;
+      $("autolockSelect").value = String(state.settings.autolockMinutes ?? 5);
+      $("autolockSelect").onchange = e => { state.settings.autolockMinutes = Number(e.target.value); saveSettings(); resetAutoLock(); };
+      $("setupPasskeySettings").onclick = setupPasskey;
+      $("lockNowSettings").onclick = lockNow;
+      $("exportFull").onclick = exportVaultFile;
+      $("importFull").onclick = () => $("importInput").click();
+      $("shareFull").onclick = shareVaultFile;
+      $("toggleThemeSettings").onclick = toggleTheme;
+      $("wipeAll").onclick = wipeAll;
+    }
+
+    function openEntry(id = null, presetType = "note") {
+      state.editingId = id;
+      state.draftAttachments = [];
+      $("draftAttachments").innerHTML = "";
+      $("recordStatus").textContent = "Голосовий запис не активний";
+      if (id) {
+        const e = state.entries.find(x => x.id === id);
+        if (!e) return;
+        $("dialogTitle").textContent = "Редагування запису";
+        $("entryTitle").value = e.title || "";
+        $("entryType").value = e.type || "note";
+        $("entryTags").value = (e.tags || []).join(", ");
+        $("entryBody").value = e.body || "";
+        $("entryFavorite").checked = !!e.favorite;
+        $("entryPinned").checked = !!e.pinned;
+        state.draftAttachments = JSON.parse(JSON.stringify(e.attachments || []));
+      } else {
+        $("dialogTitle").textContent = "Новий запис";
+        $("entryTitle").value = "";
+        $("entryType").value = presetType || "note";
+        $("entryTags").value = "";
+        $("entryBody").value = "";
+        $("entryFavorite").checked = false;
+        $("entryPinned").checked = false;
+      }
+      renderDraftAttachments();
+      $("entryDialog").showModal();
+    }
+
+    function renderDraftAttachments() { $("draftAttachments").innerHTML = renderAttachments(state.draftAttachments); }
+
+    async function saveEntry() {
+      const title = $("entryTitle").value.trim() || "Без назви";
+      const body = $("entryBody").value.trim();
+      const tags = $("entryTags").value.split(",").map(x=>x.trim()).filter(Boolean);
+      const data = {
+        title,
+        type: $("entryType").value,
+        body,
+        tags,
+        favorite: $("entryFavorite").checked,
+        pinned: $("entryPinned").checked,
+        attachments: state.draftAttachments,
+        updatedAt: nowISO()
+      };
+      if (state.editingId) state.entries = state.entries.map(e => e.id === state.editingId ? { ...e, ...data } : e);
+      else state.entries.unshift({ id: uid(), createdAt: nowISO(), ...data });
+      await saveVault();
+      $("entryDialog").close();
+      render();
+    }
+
+    async function fileToAttachment(file, kind = "file") {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onerror = reject;
+        reader.onload = () => resolve({
+          id: uid(), kind, name: file.name || `${kind}-${Date.now()}`,
+          type: file.type || "application/octet-stream",
+          size: file.size || 0, data: reader.result, createdAt: nowISO()
+        });
+        reader.readAsDataURL(file);
+      });
+    }
+    async function addFiles(fileList, kind) {
+      const files = Array.from(fileList || []);
+      for (const file of files) state.draftAttachments.push(await fileToAttachment(file, kind));
+      renderDraftAttachments();
+    }
+
+    async function startRecording() {
+      if (!navigator.mediaDevices || !window.MediaRecorder) return alert("Цей браузер не підтримує запис голосу всередині PWA.");
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        state.recordChunks = [];
+        const rec = new MediaRecorder(stream);
+        state.mediaRecorder = rec;
+        rec.ondataavailable = e => { if (e.data && e.data.size) state.recordChunks.push(e.data); };
+        rec.onstop = async () => {
+          const blob = new Blob(state.recordChunks, { type: rec.mimeType || "audio/webm" });
+          const file = new File([blob], `voice-${new Date().toISOString().replace(/[:.]/g,"-")}.webm`, { type: blob.type });
+          state.draftAttachments.push(await fileToAttachment(file, "recording"));
+          renderDraftAttachments();
+          stream.getTracks().forEach(t => t.stop());
+          $("recordStatus").textContent = "Голосовий запис додано";
+          $("startRecord").disabled = false;
+          $("stopRecord").disabled = true;
+        };
+        rec.start();
+        $("recordStatus").textContent = "Йде запис голосу...";
+        $("startRecord").disabled = true;
+        $("stopRecord").disabled = false;
+      } catch { alert("Не вдалося отримати доступ до мікрофона."); }
+    }
+    function stopRecording() {
+      if (state.mediaRecorder && state.mediaRecorder.state !== "inactive") state.mediaRecorder.stop();
+    }
+
+    async function toggleField(id, field) {
+      state.entries = state.entries.map(e => e.id === id ? { ...e, [field]: !e[field], updatedAt: nowISO() } : e);
+      await saveVault();
+      render();
+    }
+    async function toggleFieldFromView(id, field) { await toggleField(id, field); openView(id); }
+    async function deleteEntryFromView(id) {
+      if (!confirm("Видалити запис?")) return;
+      state.entries = state.entries.filter(e => e.id !== id);
+      await saveVault();
+      closeView();
+      render();
+    }
+
+    async function shareEntry(id) {
+      const entry = state.entries.find(e => e.id === id);
+      if (!entry) return;
+      const text = entryText(entry);
+      if (navigator.share) { try { await navigator.share({ title: entry.title, text }); } catch {} }
+      else { await navigator.clipboard.writeText(text); alert("Текст скопійовано."); }
+    }
+    async function copyEntry(id) {
+      const entry = state.entries.find(e => e.id === id);
+      if (!entry) return;
+      await navigator.clipboard.writeText(entryText(entry));
+      alert("Скопійовано.");
+    }
+    async function shareDraft() {
+      const text = `${$("entryTitle").value || "Без назви"}\n\n${$("entryBody").value || ""}`;
+      if (navigator.share) { try { await navigator.share({ title: $("entryTitle").value || "Запис", text }); } catch {} }
+      else { await navigator.clipboard.writeText(text); alert("Текст скопійовано."); }
+    }
+
+    function currentVaultExport() {
+      return {
+        app: "Особистий сейф",
+        version: 4,
+        exportedAt: nowISO(),
+        settings: {
+          salt: state.settings.salt,
+          iterations: PBKDF2_ITERATIONS
+        },
+        vault: JSON.parse(localStorage.getItem(VAULT_KEY) || "{}")
+      };
+    }
+    function exportVaultFile() {
+      const blob = new Blob([JSON.stringify(currentVaultExport(), null, 2)], { type: "application/json" });
+      const a = document.createElement("a");
+      const url = URL.createObjectURL(blob);
+      a.href = url;
+      a.download = `life-journal-secure-${new Date().toISOString().slice(0,10)}.vault`;
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+    async function shareVaultFile() {
+      const text = JSON.stringify(currentVaultExport(), null, 2);
+      const file = new File([text], `life-journal-secure-${new Date().toISOString().slice(0,10)}.vault`, { type: "application/json" });
+      if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+        try { await navigator.share({ title: "Зашифрована копія сейфа", files: [file] }); } catch {}
+      } else if (navigator.share) {
+        try { await navigator.share({ title: "Зашифрована копія сейфа", text }); } catch {}
+      } else {
+        await navigator.clipboard.writeText(text);
+        alert("Зашифровану копію скопійовано.");
+      }
+    }
+    function importVaultFile(file) {
+      const reader = new FileReader();
+      reader.onload = () => {
+        try {
+          const data = JSON.parse(reader.result);
+          if (!data.vault || !data.settings?.salt) throw new Error("bad");
+          if (!confirm("Імпорт замінить поточний сейф. Продовжити?")) return;
+          localStorage.setItem(VAULT_KEY, JSON.stringify(data.vault));
+          state.settings.salt = data.settings.salt;
+          state.settings.created = true;
+          state.settings.passkeyId = null;
+          saveSettings();
+          alert("Імпорт готовий. Тепер розблокуй сейф PIN-кодом від цієї копії.");
+          lockNow();
+        } catch {
+          alert("Це не схоже на файл .vault.");
+        }
+      };
+      reader.readAsText(file);
+    }
+
+    function wipeAll() {
+      if (!confirm("Точно стерти сейф повністю? Дані не відновити без копії.")) return;
+      localStorage.removeItem(VAULT_KEY);
+      localStorage.removeItem(SETTINGS_KEY);
+      location.reload();
+    }
+
+    function toggleTheme() {
+      document.body.classList.toggle("dark");
+      localStorage.setItem(THEME_KEY, document.body.classList.contains("dark") ? "dark" : "light");
+    }
+
+    document.addEventListener("visibilitychange", () => {
+      if (document.hidden && state.unlocked) $("privacyOverlay").classList.add("show");
+      else $("privacyOverlay").classList.remove("show");
+    });
+    ["click", "keydown", "touchstart"].forEach(ev => document.addEventListener(ev, userActivity, { passive: true }));
+
+    $("unlockBtn").onclick = unlockFlow;
+    $("setupPasskeyBtn").onclick = setupPasskey;
+    $("passkeyBtn").onclick = loginPasskey;
+    $("menuBtn").onclick = openMenu;
+    $("closeMenu").onclick = closeMenu;
+    $("menuBackdrop").onclick = closeMenu;
+    $("themeBtn").onclick = toggleTheme;
+    $("lockNowBtn").onclick = lockNow;
+    document.querySelectorAll("[data-view]").forEach(btn => btn.onclick = () => setView(btn.dataset.view));
+    $("quickAddBtn").onclick = () => openEntry();
+    $("clearSearch").onclick = () => { $("searchInput").value = ""; render(); };
+    $("searchInput").oninput = render;
+    $("closeView").onclick = closeView;
+    $("editFromView").onclick = () => {
+      const id = state.viewingId;
+      if (!id) return;
+      $("viewDialog").close();
+      openEntry(id);
+    };
+    $("shareFromView").onclick = () => state.viewingId && shareEntry(state.viewingId);
+    $("closeEntry").onclick = () => $("entryDialog").close();
+    $("saveEntry").onclick = saveEntry;
+    $("shareDraft").onclick = shareDraft;
+    $("addMediaBtn").onclick = () => $("mediaInput").click();
+    $("addAudioBtn").onclick = () => $("audioInput").click();
+    $("addAnyFileBtn").onclick = () => $("fileInput").click();
+    $("mediaInput").onchange = e => addFiles(e.target.files, "media");
+    $("audioInput").onchange = e => addFiles(e.target.files, "audio");
+    $("fileInput").onchange = e => addFiles(e.target.files, "file");
+    $("startRecord").onclick = startRecording;
+    $("stopRecord").onclick = stopRecording;
+    $("importInput").onchange = e => e.target.files[0] && importVaultFile(e.target.files[0]);
+
+    if ("serviceWorker" in navigator) navigator.serviceWorker.register("./service-worker.js");
+
+    const theme = localStorage.getItem(THEME_KEY);
+    if (theme === "dark") document.body.classList.add("dark");
+    loadSettings();
+    renderLock();
+  </script>
+</body>
+</html>
