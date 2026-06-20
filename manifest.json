@@ -1,16 +1,19 @@
 {
   "name": "Opus — особистий цифровий сейф",
   "short_name": "Opus",
-  "description": "Офлайн PWA для нотаток, щоденника, медіа, документів і бази знань із шифруванням.",
+  "description": "PWA для нотаток, знань, медіа і документів з локальним шифруванням.",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
-  "orientation": "any",
-  "background_color": "#f7f2ea",
-  "theme_color": "#f7f2ea",
-  "categories": ["productivity", "utilities"],
+  "orientation": "portrait",
+  "background_color": "#f7f4ee",
+  "theme_color": "#f7f4ee",
   "icons": [
-    {"src":"assets/icons/icon-192.png","sizes":"192x192","type":"image/png","purpose":"any maskable"},
-    {"src":"assets/icons/icon-512.png","sizes":"512x512","type":"image/png","purpose":"any maskable"}
+    {
+      "src": "assets/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
   ]
 }

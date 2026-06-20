@@ -1,189 +1,370 @@
-import {all,set,get,del} from './modules/db.js';
-import {hasVault,unlockVault} from './modules/auth.js';
-import {encryptJSON,decryptJSON,encryptBlob,decryptToBlob} from './modules/crypto.js';
-import {detectKind,renderAttachment} from './modules/media.js';
-import {exportVault,importVaultFile} from './modules/backup.js';
-import {tryPasskeyUnlock} from './modules/webauthn.js';
+import { clearAll, get, put, getAll } from "./modules/db.js";
+import { registerUser, loginPassword, loginPin, getUserMeta, lockSession, session } from "./modules/auth.js";
+import { categories, saveEntry, listEntries, deleteEntry } from "./modules/entries.js";
+import { saveAttachment, getAttachmentBlob, deleteAttachment } from "./modules/media.js";
 
-const defaultCategories = ['Щоденник','Нотатки','Робота','Книги','Промпти ШІ','Ідеї','Документи','Родина','Фінанси'];
-const $ = sel => document.querySelector(sel);
-const state = {key:null, entries:[], attachments:[], categories:[], selectedCategory:'Головна', editing:null, draftFiles:[], mediaRecorder:null, chunks:[], autoLockMs:300000, timer:null};
+const $ = s => document.querySelector(s);
+const $$ = s => [...document.querySelectorAll(s)];
 
-const els = {
-  lockScreen:$('#lockScreen'), appShell:$('#appShell'), pinForm:$('#pinForm'), pinInput:$('#pinInput'), lockSubtitle:$('#lockSubtitle'), lockHint:$('#lockHint'), faceButton:$('#faceButton'),
-  categoryList:$('#categoryList'), viewTitle:$('#viewTitle'), viewSubtitle:$('#viewSubtitle'), homeView:$('#homeView'), listView:$('#listView'), entryList:$('#entryList'), recentList:$('#recentList'), pinnedList:$('#pinnedList'),
-  statEntries:$('#statEntries'), statFav:$('#statFav'), statPinned:$('#statPinned'), statFiles:$('#statFiles'), searchInput:$('#searchInput'), newEntryButton:$('#newEntryButton'),
-  editorPane:$('#editorPane'), closeEditor:$('#closeEditor'), entryTitle:$('#entryTitle'), entryCategory:$('#entryCategory'), entryTags:$('#entryTags'), entryBody:$('#entryBody'), attachmentsGrid:$('#attachmentsGrid'),
-  fileInput:$('#fileInput'), saveEntry:$('#saveEntry'), deleteEntry:$('#deleteEntry'), duplicateEntry:$('#duplicateEntry'), archiveEntry:$('#archiveEntry'), pinEntry:$('#pinEntry'), favEntry:$('#favEntry'), recordButton:$('#recordButton'), recordingStatus:$('#recordingStatus'),
-  backupButton:$('#backupButton'), importButton:$('#importButton'), vaultImportInput:$('#vaultImportInput'), settingsButton:$('#settingsButton'), settingsDialog:$('#settingsDialog'), autoLockSelect:$('#autoLockSelect'), newCategoryInput:$('#newCategoryInput'), addCategoryButton:$('#addCategoryButton'), themeToggle:$('#themeToggle'), lockButton:$('#lockButton'), privacyShield:$('#privacyShield')
+const state = {
+  entries: [],
+  editingId: null,
+  currentAttachments: [],
+  mediaRecorder: null,
+  chunks: [],
+  lastActive: Date.now()
 };
 
-boot();
+function msg(text = "") { $("#authMessage").textContent = text; }
 
-async function boot(){
-  document.documentElement.dataset.theme = localStorage.getItem('opus-theme') || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
-  els.lockSubtitle.textContent = await hasVault() ? 'Введіть PIN-код' : 'Створіть PIN-код: мінімум 6 цифр';
-  bindEvents();
-  if('serviceWorker' in navigator) navigator.serviceWorker.register('./service-worker.js');
+function showAuth(mode = "login") {
+  $("#mainView").classList.add("hidden");
+  $("#authView").classList.remove("hidden");
+  ["loginForm","registerForm","pinForm"].forEach(id => $("#" + id).classList.remove("active"));
+  if (mode === "register") $("#registerForm").classList.add("active");
+  else if (mode === "pin") $("#pinForm").classList.add("active");
+  else $("#loginForm").classList.add("active");
+  $("#loginTab").classList.toggle("active", mode !== "register");
+  $("#registerTab").classList.toggle("active", mode === "register");
 }
 
-function bindEvents(){
-  els.pinForm.addEventListener('submit', async e => { e.preventDefault(); await unlock(); });
-  els.faceButton.addEventListener('click', async()=>{ try{ await tryPasskeyUnlock(); }catch(e){ showLockHint(e.message); els.pinInput.focus(); }});
-  els.newEntryButton.addEventListener('click',()=>openEditor());
-  document.querySelectorAll('[data-quick]').forEach(btn => btn.addEventListener('click',()=>openEditor({category:btn.dataset.quick})));
-  els.closeEditor.addEventListener('click',closeEditor);
-  els.saveEntry.addEventListener('click',saveCurrentEntry);
-  els.deleteEntry.addEventListener('click',deleteCurrentEntry);
-  els.duplicateEntry.addEventListener('click',duplicateCurrentEntry);
-  els.archiveEntry.addEventListener('click',archiveCurrentEntry);
-  els.pinEntry.addEventListener('click',()=>toggleDraft('pinned'));
-  els.favEntry.addEventListener('click',()=>toggleDraft('favorite'));
-  els.fileInput.addEventListener('change',addFiles);
-  els.searchInput.addEventListener('input',render);
-  els.backupButton.addEventListener('click',exportVault);
-  els.importButton.addEventListener('click',()=>els.vaultImportInput.click());
-  els.vaultImportInput.addEventListener('change',async()=>{ if(els.vaultImportInput.files[0]){ await importVaultFile(els.vaultImportInput.files[0]); location.reload(); }});
-  els.settingsButton.addEventListener('click',()=>els.settingsDialog.showModal());
-  els.autoLockSelect.addEventListener('change',async()=>{ state.autoLockMs = Number(els.autoLockSelect.value); await set('settings',{key:'autoLockMs', value:state.autoLockMs}); resetAutoLock(); });
-  els.addCategoryButton.addEventListener('click',addCategory);
-  els.themeToggle.addEventListener('click',toggleTheme);
-  els.lockButton.addEventListener('click',lock);
-  els.recordButton.addEventListener('click',toggleRecording);
-  ['click','keydown','pointermove','touchstart'].forEach(evt => document.addEventListener(evt, resetAutoLock, {passive:true}));
-  document.addEventListener('visibilitychange',()=>{ els.privacyShield.classList.toggle('show', document.hidden); if(document.hidden) lock(false); });
+function showMain() {
+  $("#authView").classList.add("hidden");
+  $("#mainView").classList.remove("hidden");
+  $("#helloLine").textContent = session.user ? `Сейф: ${session.user}` : "Ваш сейф";
+  refreshAll();
 }
 
-async function unlock(){
-  try{
-    state.key = await unlockVault(els.pinInput.value.trim());
-    els.pinInput.value = '';
-    els.lockScreen.classList.add('hidden');
-    els.appShell.classList.remove('hidden');
-    await ensureDefaults();
-    await loadData();
-    resetAutoLock();
-  }catch(err){ showLockHint(err.message); }
-}
-function showLockHint(msg){ els.lockHint.textContent = msg; }
-function lock(showScreen=true){ state.key=null; closeEditor(); if(showScreen){ els.appShell.classList.add('hidden'); els.lockScreen.classList.remove('hidden'); els.lockSubtitle.textContent='Введіть PIN-код'; } }
-function resetAutoLock(){ if(!state.key) return; clearTimeout(state.timer); state.timer=setTimeout(()=>lock(), state.autoLockMs); }
-
-async function ensureDefaults(){
-  const cats = await all('categories');
-  if(!cats.length){ for(const name of defaultCategories) await set('categories',{id:crypto.randomUUID(), name, system:true}); }
-  const setting = await get('settings','autoLockMs');
-  if(!setting) await set('settings',{key:'autoLockMs', value:300000});
+function setScreen(id) {
+  $$(".screen").forEach(s => s.classList.remove("active"));
+  $("#" + id).classList.add("active");
+  $$(".nav-btn").forEach(b => b.classList.toggle("active", b.dataset.screen === id));
 }
 
-async function loadData(){
-  state.categories = (await all('categories')).sort((a,b)=>a.name.localeCompare(b.name,'uk'));
-  const setting = await get('settings','autoLockMs');
-  state.autoLockMs = setting?.value || 300000; els.autoLockSelect.value = String(state.autoLockMs);
-  const encryptedEntries = await all('entries');
-  const encryptedAttachments = await all('attachments');
-  state.entries = [];
-  for(const item of encryptedEntries){ try{ state.entries.push(await decryptJSON(state.key,item.payload)); }catch{} }
-  state.attachments = encryptedAttachments;
-  render();
+function escapeHtml(s) {
+  return String(s || "").replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]));
 }
 
-function render(){ renderCategories(); renderHome(); renderList(); fillCategorySelect(); }
-function renderCategories(){
-  const items = ['Головна','Обране','Закріплені','Архів',...state.categories.map(c=>c.name)];
-  els.categoryList.innerHTML = '';
-  for(const name of items){
-    const btn = document.createElement('button'); btn.className = 'category-item' + (state.selectedCategory===name?' active':''); btn.textContent = name;
-    btn.addEventListener('click',()=>{ state.selectedCategory=name; render(); }); els.categoryList.append(btn);
+function formatDate(ts) {
+  return new Date(ts).toLocaleDateString("uk-UA", { day:"2-digit", month:"2-digit", year:"numeric" });
+}
+
+async function refreshAll() {
+  state.entries = await listEntries();
+  $("#totalCount").textContent = state.entries.length;
+  $("#favCount").textContent = state.entries.filter(e => e.favorite).length;
+  $("#pinCount").textContent = state.entries.filter(e => e.pinned).length;
+  renderList($("#recentList"), state.entries.slice(0, 20));
+  renderList($("#searchList"), state.entries);
+  renderCategories();
+}
+
+function renderList(container, entries) {
+  if (!entries.length) {
+    container.innerHTML = `<div class="entry-card"><h4>Поки пусто</h4><p>Створи перший запис. Це швидше, ніж шукати ідеальний додаток 😄</p></div>`;
+    return;
+  }
+  container.innerHTML = entries.map(e => `
+    <article class="entry-card" data-id="${e.id}">
+      <h4>${e.pinned ? "📌 " : ""}${escapeHtml(e.title)}</h4>
+      <p>${escapeHtml(e.body)}</p>
+      <div class="entry-meta">
+        <span>${escapeHtml(e.category)}</span>
+        <span>${formatDate(e.updatedAt)}</span>
+        ${e.attachments?.length ? `<span>📎 ${e.attachments.length}</span>` : ""}
+      </div>
+      <div class="card-actions">
+        <button data-action="open">Відкрити</button>
+        <button data-action="fav">${e.favorite ? "★" : "☆"}</button>
+        <button data-action="pin">${e.pinned ? "Відкр." : "Закр."}</button>
+        <button data-action="delete">Видалити</button>
+      </div>
+    </article>
+  `).join("");
+}
+
+function renderCategories() {
+  const counts = Object.fromEntries(categories.map(c => [c, 0]));
+  state.entries.forEach(e => counts[e.category] = (counts[e.category] || 0) + 1);
+  $("#categoryList").innerHTML = Object.keys(counts).map(c => `
+    <button class="category-pill" data-cat="${escapeHtml(c)}">
+      <span>${escapeHtml(c)}</span><strong>${counts[c]}</strong>
+    </button>
+  `).join("");
+}
+
+function fillCategories() {
+  $("#entryCategory").innerHTML = categories.map(c => `<option>${escapeHtml(c)}</option>`).join("");
+}
+
+function newEntry(category = "Нотатки") {
+  state.editingId = null;
+  state.currentAttachments = [];
+  $("#entryTitle").value = "";
+  $("#entryCategory").value = category;
+  $("#entryTags").value = "";
+  $("#entryBody").value = "";
+  $("#attachmentsPreview").innerHTML = "";
+  setScreen("editorScreen");
+  setTimeout(() => $("#entryTitle").focus(), 80);
+}
+
+async function openEntry(id) {
+  const e = state.entries.find(x => x.id === id);
+  if (!e) return;
+  state.editingId = e.id;
+  state.currentAttachments = e.attachments || [];
+  $("#entryTitle").value = e.title || "";
+  $("#entryCategory").value = e.category || "Нотатки";
+  $("#entryTags").value = (e.tags || []).join(", ");
+  $("#entryBody").value = e.body || "";
+  await renderAttachments();
+  setScreen("editorScreen");
+}
+
+async function renderAttachments() {
+  const box = $("#attachmentsPreview");
+  box.innerHTML = "";
+  for (const att of state.currentAttachments) {
+    const blob = await getAttachmentBlob(att.id);
+    if (!blob) continue;
+    const url = URL.createObjectURL(blob);
+    const div = document.createElement("div");
+    div.className = "media-item";
+    if ((att.mime || "").startsWith("image/")) {
+      div.innerHTML = `<img loading="lazy" src="${url}" alt="">`;
+    } else if ((att.mime || "").startsWith("video/")) {
+      div.innerHTML = `<video controls playsinline src="${url}"></video>`;
+    } else if ((att.mime || "").startsWith("audio/")) {
+      div.innerHTML = `<audio controls src="${url}"></audio>`;
+    } else {
+      div.innerHTML = `<div style="padding:18px;font-weight:800">📄 Документ</div>`;
+    }
+    const btn = document.createElement("button");
+    btn.textContent = "Видалити";
+    btn.onclick = async () => {
+      await deleteAttachment(att.id);
+      state.currentAttachments = state.currentAttachments.filter(a => a.id !== att.id);
+      await renderAttachments();
+    };
+    div.appendChild(btn);
+    box.appendChild(div);
   }
 }
-function filteredEntries(){
-  const q = els.searchInput.value.trim().toLowerCase();
-  return state.entries.filter(e => {
-    if(e.deleted) return false;
-    if(state.selectedCategory==='Обране' && !e.favorite) return false;
-    else if(state.selectedCategory==='Закріплені' && !e.pinned) return false;
-    else if(state.selectedCategory==='Архів' && !e.archived) return false;
-    else if(!['Головна','Обране','Закріплені','Архів'].includes(state.selectedCategory) && e.category !== state.selectedCategory) return false;
-    if(state.selectedCategory !== 'Архів' && e.archived) return false;
-    if(!q) return true;
-    return [e.title,e.body,e.category,(e.tags||[]).join(' ')].join(' ').toLowerCase().includes(q);
-  }).sort((a,b)=>(b.pinned-a.pinned) || b.updatedAt-a.updatedAt);
-}
-function renderHome(){
-  const active = state.selectedCategory==='Головна' && !els.searchInput.value.trim();
-  els.homeView.classList.toggle('active', active); els.listView.classList.toggle('active', !active);
-  els.viewTitle.textContent = state.selectedCategory==='Головна' ? 'Головна' : state.selectedCategory;
-  els.viewSubtitle.textContent = active ? 'Ваші записи, медіа та знання' : `${filteredEntries().length} записів`;
-  els.statEntries.textContent = state.entries.filter(e=>!e.deleted && !e.archived).length;
-  els.statFav.textContent = state.entries.filter(e=>e.favorite && !e.deleted).length;
-  els.statPinned.textContent = state.entries.filter(e=>e.pinned && !e.deleted).length;
-  els.statFiles.textContent = state.attachments.length;
-  renderEntryList(els.recentList, state.entries.filter(e=>!e.deleted && !e.archived).sort((a,b)=>b.updatedAt-a.updatedAt).slice(0,6));
-  renderEntryList(els.pinnedList, state.entries.filter(e=>e.pinned && !e.deleted && !e.archived).sort((a,b)=>b.updatedAt-a.updatedAt).slice(0,6));
-}
-function renderList(){ renderEntryList(els.entryList, filteredEntries()); }
-function renderEntryList(container, entries){
-  container.innerHTML = '';
-  if(!entries.length){ container.innerHTML = '<p class="hint">Поки що пусто.</p>'; return; }
-  for(const e of entries){
-    const card = document.createElement('article'); card.className='entry-card';
-    card.innerHTML = `<h3>${escapeHTML(e.title || 'Без назви')}</h3><p>${escapeHTML((e.body||'').slice(0,180))}</p><div class="entry-badges"><span class="badge">${escapeHTML(e.category)}</span>${e.pinned?'<span class="badge">Закріплено</span>':''}${e.favorite?'<span class="badge">Обране</span>':''}${(e.tags||[]).slice(0,4).map(t=>`<span class="badge">#${escapeHTML(t)}</span>`).join('')}</div>`;
-    card.addEventListener('click',()=>openEditor(e)); container.append(card);
-  }
-}
-function fillCategorySelect(){ els.entryCategory.innerHTML = state.categories.map(c=>`<option>${escapeHTML(c.name)}</option>`).join(''); }
 
-function openEditor(entry={}){
-  state.editing = entry.id ? structuredClone(entry) : {id:crypto.randomUUID(), title:'', body:'', category:entry.category || 'Нотатки', tags:[], pinned:false, favorite:false, archived:false, createdAt:Date.now(), updatedAt:Date.now()};
-  state.draftFiles = [];
-  els.entryTitle.value = state.editing.title || '';
-  fillCategorySelect(); els.entryCategory.value = state.editing.category || 'Нотатки';
-  els.entryTags.value = (state.editing.tags || []).join(', ');
-  els.entryBody.value = state.editing.body || '';
-  updateToggleButtons(); renderAttachments(); els.editorPane.classList.remove('hidden');
+async function saveCurrentEntry() {
+  const entry = {
+    id: state.editingId,
+    title: $("#entryTitle").value.trim() || "Без назви",
+    category: $("#entryCategory").value,
+    tags: $("#entryTags").value.split(",").map(t => t.trim()).filter(Boolean),
+    body: $("#entryBody").value,
+    attachments: state.currentAttachments
+  };
+  await saveEntry(entry);
+  await refreshAll();
+  setScreen("homeScreen");
 }
-function closeEditor(){ els.editorPane.classList.add('hidden'); state.editing=null; state.draftFiles=[]; }
-function collectDraft(){
-  Object.assign(state.editing,{title:els.entryTitle.value.trim(), body:els.entryBody.value, category:els.entryCategory.value, tags:els.entryTags.value.split(',').map(t=>t.trim()).filter(Boolean), updatedAt:Date.now()});
-  return state.editing;
-}
-async function saveCurrentEntry(){
-  const entry = collectDraft();
-  await set('entries',{id:entry.id,payload:await encryptJSON(state.key,entry),updatedAt:entry.updatedAt,category:entry.category});
-  for(const item of state.draftFiles){
-    const payload = await encryptBlob(state.key,item.file);
-    await set('attachments',{id:item.id,entryId:entry.id,kind:item.kind,type:item.file.type,name:item.file.name || item.name,payload,createdAt:Date.now()});
-  }
-  await loadData(); closeEditor();
-}
-async function deleteCurrentEntry(){ if(!state.editing) return; const entry=collectDraft(); entry.deleted=true; await set('entries',{id:entry.id,payload:await encryptJSON(state.key,entry),updatedAt:Date.now(),category:entry.category}); await loadData(); closeEditor(); }
-async function archiveCurrentEntry(){ state.editing.archived = !state.editing.archived; await saveCurrentEntry(); }
-function duplicateCurrentEntry(){ const src=collectDraft(); openEditor({...src,id:crypto.randomUUID(),title:`${src.title || 'Без назви'} копія`,createdAt:Date.now(),updatedAt:Date.now()}); }
-function toggleDraft(field){ state.editing[field] = !state.editing[field]; updateToggleButtons(); }
-function updateToggleButtons(){ els.pinEntry.textContent = state.editing?.pinned ? 'Відкріпити' : 'Закріпити'; els.favEntry.textContent = state.editing?.favorite ? 'Прибрати з обраного' : 'В обране'; }
 
-async function addFiles(){ for(const file of els.fileInput.files){ state.draftFiles.push({id:crypto.randomUUID(), file, kind:detectKind(file.type)}); } els.fileInput.value=''; await renderAttachments(); }
-async function renderAttachments(){
-  els.attachmentsGrid.innerHTML = '';
-  if(!state.editing) return;
-  const existing = state.attachments.filter(a=>a.entryId===state.editing.id);
-  for(const a of existing){
-    try{ const blob = await decryptToBlob(state.key, a.payload, a.type); const url = URL.createObjectURL(blob); els.attachmentsGrid.append(renderAttachment({...a,url}, deleteAttachment)); }
-    catch{}
-  }
-  for(const item of state.draftFiles){ const url = URL.createObjectURL(item.file); els.attachmentsGrid.append(renderAttachment({id:item.id,kind:item.kind,type:item.file.type,url,name:item.file.name}, id=>{ state.draftFiles=state.draftFiles.filter(f=>f.id!==id); renderAttachments(); })); }
+async function exportVault() {
+  const meta = await get("meta", "user");
+  const entries = await getAll("entries");
+  const attachments = await getAll("attachments");
+  const vault = { app: "Opus", version: 3, exportedAt: Date.now(), meta, entries, attachments };
+  downloadBlob(new Blob([JSON.stringify(vault)], { type:"application/json" }), `opus-${Date.now()}.vault`);
 }
-async function deleteAttachment(id){ await del('attachments',id); state.attachments = state.attachments.filter(a=>a.id!==id); renderAttachments(); render(); }
 
-async function toggleRecording(){
-  if(state.mediaRecorder?.state === 'recording'){ state.mediaRecorder.stop(); return; }
-  const stream = await navigator.mediaDevices.getUserMedia({audio:true});
-  state.chunks=[]; state.mediaRecorder = new MediaRecorder(stream);
-  state.mediaRecorder.ondataavailable = e => state.chunks.push(e.data);
-  state.mediaRecorder.onstop = () => { const blob = new Blob(state.chunks,{type:'audio/webm'}); state.draftFiles.push({id:crypto.randomUUID(), file:new File([blob],`voice-${Date.now()}.webm`,{type:'audio/webm'}), kind:'audio'}); stream.getTracks().forEach(t=>t.stop()); els.recordingStatus.textContent='Голосову нотатку додано.'; els.recordButton.textContent='🎙️ Запис голосу'; renderAttachments(); };
-  state.mediaRecorder.start(); els.recordingStatus.textContent='Йде запис...'; els.recordButton.textContent='■ Зупинити запис';
+async function exportJson() {
+  const data = { exportedAt: Date.now(), entries: state.entries };
+  downloadBlob(new Blob([JSON.stringify(data, null, 2)], { type:"application/json" }), `opus-open-json-${Date.now()}.json`);
 }
-async function addCategory(){ const name=els.newCategoryInput.value.trim(); if(!name) return; await set('categories',{id:crypto.randomUUID(),name,system:false}); els.newCategoryInput.value=''; await loadData(); }
-function toggleTheme(){ const next = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'; document.documentElement.dataset.theme=next; localStorage.setItem('opus-theme',next); }
-function escapeHTML(value=''){ return String(value).replace(/[&<>'"]/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#039;','"':'&quot;'}[ch])); }
+
+function downloadBlob(blob, name) {
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = name;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+
+function applyTheme() {
+  const stored = localStorage.getItem("opus-theme") || "auto";
+  const dark = stored === "dark" || (stored === "auto" && matchMedia("(prefers-color-scheme: dark)").matches);
+  document.documentElement.classList.toggle("dark", dark);
+}
+
+function lockNow() {
+  lockSession();
+  $("#privacyShield").classList.add("show");
+  showAuth("pin");
+  setTimeout(() => $("#privacyShield").classList.remove("show"), 250);
+}
+
+function markActive() { state.lastActive = Date.now(); }
+
+async function init() {
+  fillCategories();
+  applyTheme();
+
+  if ("serviceWorker" in navigator) {
+    navigator.serviceWorker.register("./service-worker.js").catch(() => {});
+  }
+
+  const meta = await getUserMeta();
+  if (!meta) showAuth("register");
+  else {
+    $("#quickPinBtn").classList.remove("hidden");
+    showAuth("login");
+  }
+
+  $("#loginTab").onclick = () => showAuth("login");
+  $("#registerTab").onclick = () => showAuth("register");
+  $("#quickPinBtn").onclick = () => showAuth("pin");
+  $("#backToLoginBtn").onclick = () => showAuth("login");
+
+  $("#registerForm").onsubmit = async e => {
+    e.preventDefault(); msg("");
+    try {
+      const p1 = $("#registerPassword").value;
+      const p2 = $("#registerPassword2").value;
+      if (p1 !== p2) throw new Error("Паролі не співпадають.");
+      await registerUser($("#registerName").value, p1, $("#registerPin").value);
+      showMain();
+    } catch (err) { msg(err.message); }
+  };
+
+  $("#loginForm").onsubmit = async e => {
+    e.preventDefault(); msg("");
+    try {
+      await loginPassword($("#loginName").value, $("#loginPassword").value);
+      showMain();
+    } catch (err) { msg(err.message); }
+  };
+
+  $("#pinForm").onsubmit = async e => {
+    e.preventDefault(); msg("");
+    try {
+      await loginPin($("#pinInput").value);
+      $("#pinInput").value = "";
+      showMain();
+    } catch (err) { msg(err.message); }
+  };
+
+  $$(".nav-btn").forEach(btn => btn.onclick = () => setScreen(btn.dataset.screen));
+  $("#newEntryBtn").onclick = () => newEntry();
+  $$(".quick-btn").forEach(btn => btn.onclick = () => newEntry(btn.dataset.new));
+  $("#closeEditorBtn").onclick = () => setScreen("homeScreen");
+  $("#saveEntryBtn").onclick = saveCurrentEntry;
+  $("#lockBtn").onclick = lockNow;
+
+  $("#themeBtn").onclick = () => {
+    const cur = localStorage.getItem("opus-theme") || "auto";
+    localStorage.setItem("opus-theme", cur === "dark" ? "light" : "dark");
+    applyTheme();
+  };
+
+  $("#fileInput").onchange = async e => {
+    for (const file of e.target.files) {
+      const saved = await saveAttachment(file);
+      state.currentAttachments.push(saved);
+    }
+    e.target.value = "";
+    await renderAttachments();
+  };
+
+  $("#recordBtn").onclick = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      state.chunks = [];
+      state.mediaRecorder = new MediaRecorder(stream);
+      state.mediaRecorder.ondataavailable = e => state.chunks.push(e.data);
+      state.mediaRecorder.onstop = async () => {
+        const blob = new Blob(state.chunks, { type: "audio/webm" });
+        const file = new File([blob], `voice-${Date.now()}.webm`, { type: "audio/webm" });
+        const saved = await saveAttachment(file);
+        state.currentAttachments.push(saved);
+        stream.getTracks().forEach(t => t.stop());
+        await renderAttachments();
+      };
+      state.mediaRecorder.start();
+      $("#recordBtn").classList.add("hidden");
+      $("#stopRecordBtn").classList.remove("hidden");
+    } catch {
+      alert("Браузер не дав доступ до мікрофона.");
+    }
+  };
+
+  $("#stopRecordBtn").onclick = () => {
+    if (state.mediaRecorder) state.mediaRecorder.stop();
+    $("#stopRecordBtn").classList.add("hidden");
+    $("#recordBtn").classList.remove("hidden");
+  };
+
+  document.body.addEventListener("click", async e => {
+    const card = e.target.closest(".entry-card");
+    if (!card) return;
+    const id = card.dataset.id;
+    const action = e.target.dataset.action;
+    const item = state.entries.find(x => x.id === id);
+    if (!action || !item) return;
+    if (action === "open") return openEntry(id);
+    if (action === "delete") {
+      if (confirm("Видалити запис?")) {
+        for (const a of item.attachments || []) await deleteAttachment(a.id);
+        await deleteEntry(id);
+        await refreshAll();
+      }
+    }
+    if (action === "fav") { item.favorite = !item.favorite; await saveEntry(item); await refreshAll(); }
+    if (action === "pin") { item.pinned = !item.pinned; await saveEntry(item); await refreshAll(); }
+  });
+
+  $("#searchInput").oninput = () => {
+    const q = $("#searchInput").value.toLowerCase().trim();
+    const filtered = state.entries.filter(e =>
+      [e.title, e.body, e.category, ...(e.tags || [])].join(" ").toLowerCase().includes(q)
+    );
+    renderList($("#searchList"), filtered);
+  };
+
+  $("#categoryList").onclick = e => {
+    const btn = e.target.closest(".category-pill");
+    if (!btn) return;
+    const cat = btn.dataset.cat;
+    setScreen("searchScreen");
+    $("#searchInput").value = cat;
+    renderList($("#searchList"), state.entries.filter(x => x.category === cat));
+  };
+
+  $("#exportVaultBtn").onclick = exportVault;
+  $("#exportJsonBtn").onclick = exportJson;
+
+  $("#importVaultInput").onchange = async e => {
+    const file = e.target.files[0];
+    if (!file) return;
+    alert("Імпорт .vault підготовлено як безпечний модуль. У цій версії краще не перезаписувати сейф без окремого підтвердження.");
+    e.target.value = "";
+  };
+
+  $("#wipeBtn").onclick = async () => {
+    if (confirm("Стерти весь локальний сейф? Назад дороги не буде.")) {
+      await clearAll();
+      location.reload();
+    }
+  };
+
+  ["touchstart","mousedown","keydown","scroll"].forEach(evt => document.addEventListener(evt, markActive, { passive:true }));
+
+  document.addEventListener("visibilitychange", async () => {
+    if (document.hidden && session.unlocked) {
+      const meta = await getUserMeta();
+      const min = Number(meta?.settings?.autoLockMinutes ?? 1);
+      if (min === 0) lockNow();
+      else setTimeout(() => {
+        if (document.hidden && session.unlocked && Date.now() - state.lastActive >= min * 60 * 1000) lockNow();
+      }, min * 60 * 1000);
+    }
+  });
+}
+
+init();
