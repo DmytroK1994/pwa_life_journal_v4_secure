@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="uk">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#f7f2ea" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="apple-mobile-web-app-title" content="Opus" />
+  <title>Opus — цифровий сейф</title>
+  <link rel="manifest" href="manifest.json" />
+  <link rel="apple-touch-icon" href="assets/icons/icon-192.png" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div id="privacyShield" class="privacy-shield"><div>Opus</div></div>
+
+  <section id="lockScreen" class="lock-screen" aria-live="polite">
+    <div class="lock-card">
+      <div class="brand-mark">O</div>
+      <h1>Opus</h1>
+      <p id="lockSubtitle">Особистий цифровий сейф</p>
+      <form id="pinForm" autocomplete="off">
+        <input id="pinInput" inputmode="numeric" type="password" minlength="6" maxlength="32" placeholder="PIN-код" aria-label="PIN-код" />
+        <button id="pinButton" type="submit">Увійти</button>
+      </form>
+      <button id="faceButton" class="ghost-button" type="button">Face ID / Passkey</button>
+      <p id="lockHint" class="hint"></p>
+    </div>
+  </section>
+
+  <main id="appShell" class="app-shell hidden">
+    <aside class="sidebar">
+      <div class="sidebar-top">
+        <div class="app-title"><span class="brand-mini">O</span><strong>Opus</strong></div>
+        <button id="lockButton" class="icon-button" title="Заблокувати">🔒</button>
+      </div>
+      <button id="newEntryButton" class="primary-button wide">＋ Новий запис</button>
+      <nav id="categoryList" class="category-list"></nav>
+      <div class="sidebar-actions">
+        <button id="backupButton" class="secondary-button wide">Експорт .vault</button>
+        <button id="importButton" class="secondary-button wide">Імпорт .vault</button>
+        <button id="settingsButton" class="secondary-button wide">Налаштування</button>
+      </div>
+    </aside>
+
+    <section class="content">
+      <header class="topbar">
+        <div>
+          <h1 id="viewTitle">Головна</h1>
+          <p id="viewSubtitle">Ваші записи, медіа та знання</p>
+        </div>
+        <div class="topbar-actions">
+          <input id="searchInput" class="search" type="search" placeholder="Пошук по всьому сейфу" />
+          <button id="themeToggle" class="icon-button" title="Тема">◐</button>
+        </div>
+      </header>
+
+      <section id="homeView" class="view active">
+        <div class="stats-grid">
+          <article class="stat-card"><span>Записів</span><strong id="statEntries">0</strong></article>
+          <article class="stat-card"><span>Обране</span><strong id="statFav">0</strong></article>
+          <article class="stat-card"><span>Закріплені</span><strong id="statPinned">0</strong></article>
+          <article class="stat-card"><span>Вкладення</span><strong id="statFiles">0</strong></article>
+        </div>
+        <div class="quick-grid">
+          <button data-quick="Щоденник">Щоденник</button>
+          <button data-quick="Нотатки">Нотатка</button>
+          <button data-quick="Промпти ШІ">Промпт ШІ</button>
+          <button data-quick="Документи">Документ</button>
+        </div>
+        <section class="panel">
+          <div class="panel-head"><h2>Закріплені</h2></div>
+          <div id="pinnedList" class="entry-list"></div>
+        </section>
+        <section class="panel">
+          <div class="panel-head"><h2>Останні записи</h2></div>
+          <div id="recentList" class="entry-list"></div>
+        </section>
+      </section>
+
+      <section id="listView" class="view">
+        <div id="entryList" class="entry-list"></div>
+      </section>
+    </section>
+
+    <section id="editorPane" class="editor-pane hidden">
+      <div class="editor-toolbar">
+        <button id="closeEditor" class="icon-button">✕</button>
+        <div class="editor-spacer"></div>
+        <button id="duplicateEntry" class="secondary-button">Дублювати</button>
+        <button id="archiveEntry" class="secondary-button">Архів</button>
+        <button id="deleteEntry" class="danger-button">Видалити</button>
+        <button id="saveEntry" class="primary-button">Зберегти</button>
+      </div>
+      <input id="entryTitle" class="entry-title-input" placeholder="Назва" />
+      <div class="entry-meta-row">
+        <select id="entryCategory"></select>
+        <input id="entryTags" placeholder="Теги через кому" />
+        <button id="pinEntry" class="secondary-button">Закріпити</button>
+        <button id="favEntry" class="secondary-button">В обране</button>
+      </div>
+      <textarea id="entryBody" class="entry-body" placeholder="Почніть писати..."></textarea>
+      <div class="media-actions">
+        <label class="file-button">＋ Вкладення<input id="fileInput" type="file" multiple hidden /></label>
+        <button id="recordButton" class="secondary-button">🎙️ Запис голосу</button>
+      </div>
+      <div id="recordingStatus" class="hint"></div>
+      <div id="attachmentsGrid" class="attachments-grid"></div>
+    </section>
+
+    <dialog id="settingsDialog" class="dialog">
+      <form method="dialog" class="dialog-card">
+        <h2>Налаштування</h2>
+        <label>Автоблокування
+          <select id="autoLockSelect">
+            <option value="60000">1 хвилина</option>
+            <option value="300000">5 хвилин</option>
+            <option value="900000">15 хвилин</option>
+            <option value="1800000">30 хвилин</option>
+          </select>
+        </label>
+        <label>Нова категорія
+          <input id="newCategoryInput" placeholder="Назва категорії" />
+        </label>
+        <button id="addCategoryButton" type="button" class="secondary-button">Додати категорію</button>
+        <button class="primary-button">Готово</button>
+      </form>
+    </dialog>
+
+    <input id="vaultImportInput" type="file" accept=".vault,application/json" hidden />
+  </main>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>
